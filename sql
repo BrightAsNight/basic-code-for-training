@@ -98,3 +98,153 @@ RECONFIGURE;
 
 EXEC sp_configure 'Ole Automation Procedures', 1;
 RECONFIGURE;
+
+
+-- ================================================
+-- SQL SERVER JSON + API + CRUD CHEAT SHEET (SSMS)
+-- ================================================
+
+-- ================================================
+-- ============ 1. WORKING WITH JSON ==============
+-- ================================================
+
+-- 🟢 Parse JSON into rows
+DECLARE @json NVARCHAR(MAX) = N'[{"id":1,"name":"Ash"},{"id":2,"name":"Misty"}]';
+SELECT * FROM OPENJSON(@json);
+
+-- 🟢 Parse JSON with schema
+DECLARE @json2 NVARCHAR(MAX) = N'{
+  "data": [
+    { "id": 1, "name": "Ash" },
+    { "id": 2, "name": "Misty" }
+  ]
+}';
+SELECT id, name
+FROM OPENJSON(@json2, '$.data')
+WITH (
+  id INT '$.id',
+  name NVARCHAR(100) '$.name'
+);
+
+-- 🟢 Extract single value
+DECLARE @simpleJson NVARCHAR(MAX) = N'{"name":"Pikachu","type":"Electric"}';
+SELECT JSON_VALUE(@simpleJson, '$.name') AS Name;
+
+-- 🟢 Extract nested array
+DECLARE @nestedJson NVARCHAR(MAX) = N'{
+  "user": {
+    "name": "Ash",
+    "pokemon": [
+      {"name": "Pikachu"},
+      {"name": "Charizard"}
+    ]
+  }
+}';
+SELECT name
+FROM OPENJSON(@nestedJson, '$.user.pokemon')
+WITH (
+  name NVARCHAR(100) '$.name'
+);
+
+-- 🟢 Convert query to JSON
+SELECT id, name
+FROM (VALUES (1, 'Ash'), (2, 'Misty')) AS t(id, name)
+FOR JSON PATH;
+
+-- ================================================
+-- ============ 2. DATABASE OPERATIONS ============
+-- ================================================
+
+-- 🔵 Create a sample table
+CREATE TABLE Trainers (
+  id INT PRIMARY KEY IDENTITY,
+  name NVARCHAR(100),
+  region NVARCHAR(100)
+);
+
+-- 🔵 Insert data
+INSERT INTO Trainers (name, region)
+VALUES ('Ash', 'Kanto'), ('Misty', 'Kanto');
+
+-- 🔵 Select data
+SELECT * FROM Trainers;
+
+-- 🔵 Update data
+UPDATE Trainers
+SET region = 'Johto'
+WHERE name = 'Ash';
+
+-- 🔵 Delete data
+DELETE FROM Trainers
+WHERE name = 'Misty';
+
+-- ================================================
+-- ======= 3. CALLING EXTERNAL APIs (OLE) =========
+-- ================================================
+
+-- 🔴 Enable OLE Automation (one-time setup)
+EXEC sp_configure 'show advanced options', 1;
+RECONFIGURE;
+EXEC sp_configure 'Ole Automation Procedures', 1;
+RECONFIGURE;
+
+-- 🔴 GET Request
+DECLARE @Object INT, @ResponseText NVARCHAR(MAX);
+DECLARE @Url NVARCHAR(1000) = 'https://pokeapi.co/api/v2/pokemon/pikachu';
+
+EXEC sp_OACreate 'MSXML2.XMLHTTP', @Object OUT;
+EXEC sp_OAMethod @Object, 'open', NULL, 'GET', @Url, false;
+EXEC sp_OAMethod @Object, 'send';
+EXEC sp_OAGetProperty @Object, 'responseText', @ResponseText OUTPUT;
+EXEC sp_OADestroy @Object;
+
+SELECT @ResponseText AS GetResponse;
+
+-- 🔴 POST Request
+DECLARE @PostUrl NVARCHAR(1000) = 'https://httpbin.org/post';
+DECLARE @JsonBody NVARCHAR(MAX) = '{"name":"Pikachu","type":"Electric"}';
+
+EXEC sp_OACreate 'MSXML2.XMLHTTP', @Object OUT;
+EXEC sp_OAMethod @Object, 'open', NULL, 'POST', @PostUrl, false;
+EXEC sp_OAMethod @Object, 'setRequestHeader', NULL, 'Content-Type', 'application/json';
+EXEC sp_OAMethod @Object, 'send', NULL, @JsonBody;
+EXEC sp_OAGetProperty @Object, 'responseText', @ResponseText OUTPUT;
+EXEC sp_OADestroy @Object;
+
+SELECT @ResponseText AS PostResponse;
+
+-- 🔴 PUT Request
+DECLARE @PutUrl NVARCHAR(1000) = 'https://httpbin.org/put';
+DECLARE @PutBody NVARCHAR(MAX) = '{"id":1,"region":"Sinnoh"}';
+
+EXEC sp_OACreate 'MSXML2.XMLHTTP', @Object OUT;
+EXEC sp_OAMethod @Object, 'open', NULL, 'PUT', @PutUrl, false;
+EXEC sp_OAMethod @Object, 'setRequestHeader', NULL, 'Content-Type', 'application/json';
+EXEC sp_OAMethod @Object, 'send', NULL, @PutBody;
+EXEC sp_OAGetProperty @Object, 'responseText', @ResponseText OUTPUT;
+EXEC sp_OADestroy @Object;
+
+SELECT @ResponseText AS PutResponse;
+
+-- 🔴 DELETE Request
+DECLARE @DeleteUrl NVARCHAR(1000) = 'https://httpbin.org/delete';
+
+EXEC sp_OACreate 'MSXML2.XMLHTTP', @Object OUT;
+EXEC sp_OAMethod @Object, 'open', NULL, 'DELETE', @DeleteUrl, false;
+EXEC sp_OAMethod @Object, 'send';
+EXEC sp_OAGetProperty @Object, 'responseText', @ResponseText OUTPUT;
+EXEC sp_OADestroy @Object;
+
+SELECT @ResponseText AS DeleteResponse;
+
+-- ================================================
+-- =========== 4. FUNCTION REFERENCE ==============
+-- ================================================
+
+-- JSON_VALUE()   => Extract single value
+-- JSON_QUERY()   => Extract object or array
+-- OPENJSON()     => Parse JSON into table rows
+-- FOR JSON PATH  => Generate structured JSON
+-- FOR JSON AUTO  => Auto-structure JSON
+-- sp_OACreate    => Used to call APIs (POST, PUT, GET, DELETE)
+
