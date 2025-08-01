@@ -93,4 +93,8 @@ select * From flavor_berries;
 --    flavor_name VARCHAR(1000),
 --    potency Int
 --);
+EXEC sp_configure 'show advanced options', 1;
+RECONFIGURE;
 
+EXEC sp_configure 'Ole Automation Procedures', 1;
+RECONFIGURE;
